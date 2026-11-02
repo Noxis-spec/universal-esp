@@ -26,6 +26,14 @@ A clean, lightweight, and fast ESP for mobile Roblox (Delta, Arceus X, Codex, Fl
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Noxis-spec/universal-esp/main/main.lua"))()
 
+## Important
+
+- **Use at your own risk.** Using ESP in games with strict anti-cheat may result in a ban.
+- **Tested on:** Delta, Arceus X, Codex, Fluxus.
+- The script only reads data from your local client and does not inject into the game server.
+
+---
+
 ## Roadmap
 
 - [ ] Tracers (lines from the bottom of the screen to the player).
