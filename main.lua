@@ -1,125 +1,107 @@
 -- universal-esp / main.lua
--- Mobile-friendly ESP using Rayfield UI Library
+-- Standalone version (No external libraries)
+-- Mobile-friendly ESP for Delta, Arceus X, Codex, Fluxus
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
 local lp = Players.LocalPlayer
 
--- ==================== ЗАГРУЗКА RAYFIELD ====================
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
-end)
-
-if not success or not Rayfield then
-    warn("Не удалось загрузить Rayfield. Проверь интернет или исполнитель.")
-    return
-end
-
--- ==================== НАСТРОЙКИ ====================
+-- ==================== CONFIG ====================
 local ESP_ENABLED = true
 local SHOW_NAME = true
 local SHOW_HEALTH = true
 local SHOW_DISTANCE = true
-local TEAM_CHECK = true
-local MAX_DISTANCE = 500
+local TEAM_CHECK = false         -- Поставь true, если в игре есть команды и нужно скрывать союзников
+local MAX_DISTANCE = 500         -- Максимальная дистанция отображения (в стадах)
 local COLOR_ENEMY = Color3.fromRGB(255, 60, 60)
--- =========================================================
+-- ================================================
 
--- ==================== СОЗДАНИЕ ОКНА ====================
-local Window = Rayfield:CreateWindow({
-    Name = "Universal ESP",
-    LoadingTitle = "Universal ESP",
-    LoadingSubtitle = "by Noxis-spec",
-    Theme = "Default", -- Можно поменять на "Amethyst", "Dark" и т.д.
-    ConfigurationSaving = {
-        Enabled = false,
-        FolderName = nil,
-        FileName = "UniversalESP"
-    },
-    KeySystem = false
-})
-
-local MainTab = Window:CreateTab("Main", nil)
-
--- ==================== ПЕРЕКЛЮЧАТЕЛИ ====================
-MainTab:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = true,
-    Flag = "ESP_Enabled",
-    Callback = function(value)
-        ESP_ENABLED = value
-        if not value then
-            -- Принудительно удаляем все ESP с экрана
-            for _, plr in ipairs(Players:GetPlayers()) do
-                local esp = plr:FindFirstChild("UniversalESP")
-                if esp then esp:Destroy() end
-            end
+-- ---------- GUI Parent (Защита от ошибок исполнителя) ----------
+local guiParent
+do
+    local ok, res = pcall(function() return gethui() end)
+    if ok and res then 
+        guiParent = res
+    else
+        local ok2, res2 = pcall(function() return game:GetService("CoreGui") end)
+        if ok2 and res2 then 
+            guiParent = res2
+        else 
+            guiParent = lp:WaitForChild("PlayerGui") 
         end
-    end,
-})
-
-MainTab:CreateToggle({
-    Name = "Show Names",
-    CurrentValue = true,
-    Flag = "ESP_Names",
-    Callback = function(value)
-        SHOW_NAME = value
-    end,
-})
-
-MainTab:CreateToggle({
-    Name = "Show Health",
-    CurrentValue = true,
-    Flag = "ESP_Health",
-    Callback = function(value)
-        SHOW_HEALTH = value
-        if not value then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                local esp = plr:FindFirstChild("UniversalESP")
-                if esp then
-                    local hb = esp:FindFirstChild("HealthBg")
-                    if hb then hb.Visible = false end
-                end
-            end
-        end
-    end,
-})
-
-MainTab:CreateToggle({
-    Name = "Show Distance",
-    CurrentValue = true,
-    Flag = "ESP_Distance",
-    Callback = function(value)
-        SHOW_DISTANCE = value
-        if not value then
-            for _, plr in ipairs(Players:GetPlayers()) do
-                local esp = plr:FindFirstChild("UniversalESP")
-                if esp then
-                    local dl = esp:FindFirstChild("Distance")
-                    if dl then dl.Visible = false end
-                end
-            end
-        end
-    end,
-})
-
-MainTab:CreateToggle({
-    Name = "Team Check (Hide Teammates)",
-    CurrentValue = true,
-    Flag = "ESP_TeamCheck",
-    Callback = function(value)
-        TEAM_CHECK = value
-    end,
-})
-
--- ==================== ЛОГИКА ESP (БЕЗ ИЗМЕНЕНИЙ) ====================
-local guiParent = game:GetService("CoreGui")
-if not pcall(function() return guiParent end) then
-    guiParent = lp:WaitForChild("PlayerGui")
+    end
 end
 
+-- Удаляем старую версию скрипта, если она висит
+for _, obj in ipairs(guiParent:GetChildren()) do
+    if obj.Name == "UniversalESP" then obj:Destroy() end
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "UniversalESP"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = guiParent
+
+-- ---------- Кнопка Включения/Выключения ----------
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 110, 0, 32)
+toggleBtn.Position = UDim2.new(0, 12, 0.5, -16)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Text = "ESP: ON"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 13
+toggleBtn.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = toggleBtn
+
+-- ---------- Логика перетаскивания кнопки ----------
+local dragging, dragStart, startPos = false, nil, nil
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = toggleBtn.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not dragging then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement
+        and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    local delta = input.Position - dragStart
+    toggleBtn.Position = UDim2.new(
+        startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y
+    )
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    ESP_ENABLED = not ESP_ENABLED
+    toggleBtn.Text = ESP_ENABLED and "ESP: ON" or "ESP: OFF"
+    if not ESP_ENABLED then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            local esp = plr:FindFirstChild("UniversalESP")
+            if esp then esp:Destroy() end
+        end
+    end
+end)
+
+-- ---------- Создание элементов ESP ----------
 local function createESP(plr)
     local esp = Instance.new("Folder")
     esp.Name = "UniversalESP"
@@ -167,7 +149,7 @@ local function createESP(plr)
     distLbl.Text = ""
     distLbl.Parent = esp
 
-    esp.Parent = guiParent
+    esp.Parent = screenGui
     return esp
 end
 
@@ -176,6 +158,7 @@ local function removeESP(plr)
     if esp then esp:Destroy() end
 end
 
+-- ---------- Главный цикл обновления ----------
 RunService.RenderStepped:Connect(function()
     if not ESP_ENABLED then return end
 
@@ -189,33 +172,39 @@ RunService.RenderStepped:Connect(function()
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChildOfClass("Humanoid")
 
+        -- Если нет стандартного персонажа (HumanoidRootPart), пропускаем
         if not (hrp and hum and hum.Health > 0) then
             removeESP(plr)
             continue
         end
 
+        -- Проверка на союзников
         if TEAM_CHECK and lp.Team and plr.Team and lp.Team == plr.Team then
             removeESP(plr)
             continue
         end
 
+        -- Проверка дистанции
         local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
         if distance > MAX_DISTANCE then
             removeESP(plr)
             continue
         end
 
+        -- Конвертация 3D координат в 2D на экране
         local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
         if not onScreen then
             removeESP(plr)
             continue
         end
 
+        -- Создаем или берем существующий ESP
         local esp = plr:FindFirstChild("UniversalESP")
         if not esp then
             esp = createESP(plr)
         end
 
+        -- Размер бокса (чем дальше, тем меньше)
         local height = math.clamp(1200 / distance, 30, 200)
         local width = height * 0.55
 
@@ -256,4 +245,5 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- Очистка, если игрок выходит с сервера
 Players.PlayerRemoving:Connect(removeESP)
