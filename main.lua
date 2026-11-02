@@ -1,6 +1,6 @@
 -- universal-esp / main.lua
 -- Standalone version (No external libraries)
--- Mobile-friendly ESP for Delta, Arceus X, Codex, Fluxus
+-- Works where loadstring/Rayfield is blocked
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -14,12 +14,12 @@ local ESP_ENABLED = true
 local SHOW_NAME = true
 local SHOW_HEALTH = true
 local SHOW_DISTANCE = true
-local TEAM_CHECK = false         -- Поставь true, если в игре есть команды и нужно скрывать союзников
+local TEAM_CHECK = true          -- true = скрывать союзников
 local MAX_DISTANCE = 500         -- Максимальная дистанция отображения (в стадах)
 local COLOR_ENEMY = Color3.fromRGB(255, 60, 60)
 -- ================================================
 
--- ---------- GUI Parent (Защита от ошибок исполнителя) ----------
+-- ---------- GUI Parent (Защита от блокировки) ----------
 local guiParent
 do
     local ok, res = pcall(function() return gethui() end)
@@ -35,7 +35,6 @@ do
     end
 end
 
--- Удаляем старую версию скрипта, если она висит
 for _, obj in ipairs(guiParent:GetChildren()) do
     if obj.Name == "UniversalESP" then obj:Destroy() end
 end
@@ -172,39 +171,33 @@ RunService.RenderStepped:Connect(function()
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-        -- Если нет стандартного персонажа (HumanoidRootPart), пропускаем
         if not (hrp and hum and hum.Health > 0) then
             removeESP(plr)
             continue
         end
 
-        -- Проверка на союзников
         if TEAM_CHECK and lp.Team and plr.Team and lp.Team == plr.Team then
             removeESP(plr)
             continue
         end
 
-        -- Проверка дистанции
         local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
         if distance > MAX_DISTANCE then
             removeESP(plr)
             continue
         end
 
-        -- Конвертация 3D координат в 2D на экране
         local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
         if not onScreen then
             removeESP(plr)
             continue
         end
 
-        -- Создаем или берем существующий ESP
         local esp = plr:FindFirstChild("UniversalESP")
         if not esp then
             esp = createESP(plr)
         end
 
-        -- Размер бокса (чем дальше, тем меньше)
         local height = math.clamp(1200 / distance, 30, 200)
         local width = height * 0.55
 
@@ -245,5 +238,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Очистка, если игрок выходит с сервера
 Players.PlayerRemoving:Connect(removeESP)
