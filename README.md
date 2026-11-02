@@ -1,50 +1,56 @@
 # Universal Mobile ESP
 
-A clean, lightweight, and fast ESP for mobile Roblox (Delta, Arceus X, Codex, Fluxus). Built specifically for phones to ensure zero lag and stable FPS. Shows players through walls, perfect for PvP and survival games.
+A lightweight, high-performance ESP script designed specifically for Roblox Mobile executors. It provides clear visibility of players through walls, optimized for mobile screen layouts and performance.
 
 ---
 
 ## Features
 
-- **2D Box ESP** — Clean bounding boxes around players that scale dynamically based on distance.
-- **Health Bar** — Real-time health tracking with a color gradient (Green to Red).
-- **Name & Distance** — Displays the player's name and exact distance in studs.
-- **Team Check** — Automatically hides teammates to keep your screen clean.
-- **Distance Culling** — Stops rendering ESP for players further than 500 studs to save device resources.
-- **Mobile Optimized UI** — A compact `ESP: ON/OFF` button that can be dragged anywhere on the screen so it never blocks your movement joystick.
+- 2D Box ESP
+- Health Bar
+- Name and Distance display
+- Team Check filtering
+- Distance Culling (up to 500 studs maximum rendering)
+- Mobile Optimized UI with a draggable toggle button
 
 ---
 
 ## How to Use
 
-1. Copy the code from the `main.lua` file.
-2. Paste it into your executor (Delta, Arceus X, etc.).
-3. Press Execute.
-4. The ESP will turn on automatically. You can drag the button around the screen.
+1. Copy the source code from the main.lua file.
+2. Paste the script into your mobile executor of choice.
+3. Press Execute to initialize the script.
+4. Drag the toggle button anywhere on your screen to manage visibility.
 
-**Quick load:**
+---
+
+## Quick load
+
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Noxis-spec/universal-esp/main/main.lua"))()
+```
+
+---
 
 ## Important
 
-- **Use at your own risk.** Using ESP in games with strict anti-cheat may result in a ban.
-- **Tested on:** Delta, Arceus X, Codex, Fluxus.
-- The script only reads data from your local client and does not inject into the game server.
+- Use this script at your own risk. Exploiting violates Roblox Terms of Service and carries a risk of account enforcement.
+- Tested and confirmed working on Delta, Arceus X, Codex, and Fluxus.
+- This script runs entirely client-side and does not modify server-side data.
 
 ---
 
 ## Roadmap
 
-- [ ] Tracers (lines from the bottom of the screen to the player).
-- [ ] Skeleton ESP (rendering character bones).
-- [ ] Chams (glowing models through walls).
-- [ ] Customizable color themes in the UI.
+- [ ] Tracers (Snaplines)
+- [ ] Skeleton ESP
+- [ ] Chams (Glow / Highlight effects)
+- [ ] Customizable color themes
 
 ---
 
 ## License
 
-MIT License. Free to modify, distribute, and build upon.
+This project is licensed under the MIT License. You are free to modify, distribute, and build upon this code.
 
 Developed by **Noxis-spec**
