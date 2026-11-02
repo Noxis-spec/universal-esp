@@ -1,6 +1,5 @@
 -- universal-esp / main.lua
--- Standalone version (No external libraries)
--- Deep Search Fix for BEAR (Alpha) SmartBone2 models
+-- Drawing API + Highlight Version (Optimized for BEAR Alpha)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,39 +12,32 @@ local lp = Players.LocalPlayer
 local ESP_ENABLED = true
 local SHOW_NAME = true
 local SHOW_HEALTH = true
-local SHOW_DISTANCE = true
-local TEAM_CHECK = true          -- Скрывать союзников (если есть команды)
-local MAX_DISTANCE = 500         -- Максимальная дистанция (в стадах)
+local TEAM_CHECK = true
+local MAX_DISTANCE = 500
 local COLOR_ENEMY = Color3.fromRGB(255, 60, 60)
 -- ================================================
 
--- ---------- GUI Parent ----------
-local guiParent
-do
-    local ok, res = pcall(function() return gethui() end)
-    if ok and res then 
-        guiParent = res
-    else
-        local ok2, res2 = pcall(function() return game:GetService("CoreGui") end)
-        if ok2 and res2 then 
-            guiParent = res2
-        else 
-            guiParent = lp:WaitForChild("PlayerGui") 
-        end
-    end
+-- Проверка на наличие Drawing API (если исполнитель не поддерживает, скрипт не запустится)
+if not Drawing then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "ESP Error",
+        Text = "Твой исполнитель не поддерживает Drawing API!",
+        Duration = 5
+    })
+    return
 end
 
-for _, obj in ipairs(guiParent:GetChildren()) do
-    if obj.Name == "UniversalESP" then obj:Destroy() end
-end
+-- ---------- GUI Parent ----------
+local guiParent = game:GetService("CoreGui") 
+local ok, gethui = pcall(function() return gethui() end)
+if ok and gethui then guiParent = gethui end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "UniversalESP"
+screenGui.Name = "UniversalESP_Drawing"
 screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
 screenGui.Parent = guiParent
 
--- ---------- Кнопка Включения/Выключения ----------
+-- ---------- Кнопка ----------
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 110, 0, 32)
 toggleBtn.Position = UDim2.new(0, 12, 0.5, -16)
@@ -60,33 +52,21 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = toggleBtn
 
--- ---------- Перетаскивание кнопки ----------
+-- Перетаскивание
 local dragging, dragStart, startPos = false, nil, nil
 toggleBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = toggleBtn.Position
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true; dragStart = input.Position; startPos = toggleBtn.Position
     end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
     if not dragging then return end
-    if input.UserInputType ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
     local delta = input.Position - dragStart
-    toggleBtn.Position = UDim2.new(
-        startPos.X.Scale, startPos.X.Offset + delta.X,
-        startPos.Y.Scale, startPos.Y.Offset + delta.Y
-    )
+    toggleBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 end)
-
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
 end)
 
 toggleBtn.MouseButton1Click:Connect(function()
@@ -100,156 +80,124 @@ toggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ---------- Создание элементов ESP ----------
+-- ---------- Drawing Objects & Highlight ----------
+local espCache = {}
+
 local function createESP(plr)
-    local esp = Instance.new("Folder")
-    esp.Name = "UniversalESP"
+    local box = Drawing.new("Square")
+    box.Thickness = 1
+    box.Color = COLOR_ENEMY
+    box.Filled = false
+    box.Visible = false
 
-    local box = Instance.new("Frame")
-    box.Name = "Box"
-    box.BackgroundTransparency = 1
-    box.BorderSizePixel = 0
-    box.Parent = esp
+    local name = Drawing.new("Text")
+    name.Size = 14
+    name.Center = true
+    name.Outline = true
+    name.Color = Color3.fromRGB(255, 255, 255)
+    name.Visible = false
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = COLOR_ENEMY
-    stroke.Thickness = 1.5
-    stroke.Parent = box
+    local healthBar = Drawing.new("Square")
+    healthBar.Thickness = 1
+    healthBar.Filled = true
+    healthBar.Visible = false
 
-    local nameLbl = Instance.new("TextLabel")
-    nameLbl.Name = "Name"
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLbl.Font = Enum.Font.GothamBold
-    nameLbl.TextSize = 11
-    nameLbl.TextStrokeTransparency = 0
-    nameLbl.Text = plr.Name
-    nameLbl.Parent = esp
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "UniversalESP"
+    highlight.FillColor = COLOR_ENEMY
+    highlight.FillTransparency = 0.8
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.5
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = false
+    highlight.Parent = plr.Character
 
-    local healthBg = Instance.new("Frame")
-    healthBg.Name = "HealthBg"
-    healthBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    healthBg.BorderSizePixel = 0
-    healthBg.Parent = esp
-
-    local healthFill = Instance.new("Frame")
-    healthFill.Name = "HealthFill"
-    healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
-    healthFill.BorderSizePixel = 0
-    healthFill.Size = UDim2.new(1, 0, 1, 0)
-    healthFill.Parent = healthBg
-
-    local distLbl = Instance.new("TextLabel")
-    distLbl.Name = "Distance"
-    distLbl.BackgroundTransparency = 1
-    distLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
-    distLbl.Font = Enum.Font.Gotham
-    distLbl.TextSize = 10
-    distLbl.Text = ""
-    distLbl.Parent = esp
-
-    esp.Parent = screenGui
-    return esp
+    espCache[plr] = {
+        box = box, name = name, healthBar = healthBar, highlight = highlight
+    }
+    return espCache[plr]
 end
 
 local function removeESP(plr)
-    local esp = plr:FindFirstChild("UniversalESP")
-    if esp then esp:Destroy() end
+    local esp = espCache[plr]
+    if esp then
+        esp.box:Remove()
+        esp.name:Remove()
+        esp.healthBar:Remove()
+        if esp.highlight then esp.highlight:Destroy() end
+        espCache[plr] = nil
+    end
 end
 
--- ---------- Главный цикл обновления ----------
+-- ---------- Главный цикл ----------
 RunService.RenderStepped:Connect(function()
-    if not ESP_ENABLED then return end
+    if not ESP_ENABLED then
+        for plr, _ in pairs(espCache) do removeESP(plr) end
+        return
+    end
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == lp then
-            removeESP(plr)
-            continue
-        end
+        if plr == lp then removeESP(plr); continue end
 
         local char = plr.Character
-        if not char then 
-            removeESP(plr)
-            continue
-        end
+        if not char then removeESP(plr); continue end
 
         local hum = char:FindFirstChildOfClass("Humanoid") or char:FindFirstChild("Humanoid")
         
-        -- УМНЫЙ ПОИСК: перебираем ВСЕ дочерние элементы (GetDescendants)
-        -- Ищем строго "HumanoidRootPart", чтобы не зацепить "Part_HumanoidRootPart"
+        -- Умный поиск (GetDescendants + поддержка Part_)
         local targetPart = nil
         for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                if part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "UpperTorso" then
-                    targetPart = part
-                    break -- Нашли нужную деталь, останавливаем поиск
-                end
+            if part:IsA("BasePart") and (part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "UpperTorso") then
+                targetPart = part
+                break
             end
         end
 
-        if not (targetPart and hum and hum.Health > 0) then
-            removeESP(plr)
-            continue
-        end
-
-        if TEAM_CHECK and lp.Team and plr.Team and lp.Team == plr.Team then
-            removeESP(plr)
-            continue
-        end
+        if not (targetPart and hum and hum.Health > 0) then removeESP(plr); continue end
+        if TEAM_CHECK and lp.Team and plr.Team and lp.Team == plr.Team then removeESP(plr); continue end
 
         local distance = (Camera.CFrame.Position - targetPart.Position).Magnitude
-        if distance > MAX_DISTANCE then
-            removeESP(plr)
-            continue
-        end
+        if distance > MAX_DISTANCE then removeESP(plr); continue end
 
         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-        if not onScreen then
-            removeESP(plr)
-            continue
-        end
+        if not onScreen then removeESP(plr); continue end
 
-        local esp = plr:FindFirstChild("UniversalESP")
-        if not esp then
-            esp = createESP(plr)
-        end
+        local esp = espCache[plr]
+        if not esp then esp = createESP(plr) end
 
         local height = math.clamp(1200 / distance, 30, 200)
         local width = height * 0.55
 
-        local box = esp:FindFirstChild("Box")
-        box.Size = UDim2.new(0, width, 0, height)
-        box.Position = UDim2.new(0, screenPos.X - width / 2, 0, screenPos.Y - height / 2)
+        -- Рисуем бокс
+        esp.box.Size = Vector2.new(width, height)
+        esp.box.Position = Vector2.new(screenPos.X - width / 2, screenPos.Y - height / 2)
+        esp.box.Visible = true
 
-        local nameLbl = esp:FindFirstChild("Name")
-        nameLbl.Visible = SHOW_NAME
+        -- Имя
         if SHOW_NAME then
-            nameLbl.Text = plr.Name
-            nameLbl.Size = UDim2.new(0, 160, 0, 14)
-            nameLbl.Position = UDim2.new(0, screenPos.X - 80, 0, screenPos.Y - height / 2 - 16)
+            esp.name.Text = plr.Name
+            esp.name.Position = Vector2.new(screenPos.X, screenPos.Y - height / 2 - 15)
+            esp.name.Visible = true
+        else
+            esp.name.Visible = false
         end
 
-        local healthBg = esp:FindFirstChild("HealthBg")
-        local healthFill = healthBg:FindFirstChild("HealthFill")
-        healthBg.Visible = SHOW_HEALTH
-        if SHOW_HEALTH then
+        -- Здоровье
+        if SHOW_HEALTH and hum then
             local hpRatio = hum.Health / hum.MaxHealth
-            healthBg.Size = UDim2.new(0, width, 0, 4)
-            healthBg.Position = UDim2.new(0, screenPos.X - width / 2, 0, screenPos.Y + height / 2 + 2)
-            healthFill.Size = UDim2.new(hpRatio, 0, 1, 0)
-            healthFill.BackgroundColor3 = Color3.fromRGB(
-                math.floor(255 * (1 - hpRatio)),
-                math.floor(255 * hpRatio),
-                60
-            )
+            local hbHeight = 4
+            esp.healthBar.Size = Vector2.new(width * hpRatio, hbHeight)
+            esp.healthBar.Position = Vector2.new(screenPos.X - width / 2, screenPos.Y + height / 2 + 2)
+            esp.healthBar.Color = Color3.fromRGB(255 * (1 - hpRatio), 255 * hpRatio, 60)
+            esp.healthBar.Visible = true
+        else
+            esp.healthBar.Visible = false
         end
 
-        local distLbl = esp:FindFirstChild("Distance")
-        distLbl.Visible = SHOW_DISTANCE
-        if SHOW_DISTANCE then
-            distLbl.Text = string.format("%d studs", math.floor(distance))
-            distLbl.Size = UDim2.new(0, 100, 0, 12)
-            distLbl.Position = UDim2.new(0, screenPos.X - 50, 0, screenPos.Y + height / 2 + 8)
+        -- Highlight (подсветка)
+        if esp.highlight then
+            esp.highlight.Enabled = true
+            esp.highlight.Parent = char
         end
     end
 end)
