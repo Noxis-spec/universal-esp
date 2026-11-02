@@ -1,6 +1,6 @@
 -- universal-esp / main.lua
 -- Standalone version (No external libraries)
--- Full support for BEAR (Alpha) custom models (Part_ prefix support)
+-- Deep Search Fix for BEAR (Alpha) SmartBone2 models
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -19,7 +19,7 @@ local MAX_DISTANCE = 500         -- Максимальная дистанция 
 local COLOR_ENEMY = Color3.fromRGB(255, 60, 60)
 -- ================================================
 
--- ---------- GUI Parent (Защита от ошибок исполнителя) ----------
+-- ---------- GUI Parent ----------
 local guiParent
 do
     local ok, res = pcall(function() return gethui() end)
@@ -35,7 +35,6 @@ do
     end
 end
 
--- Удаляем старую версию скрипта, если она висит
 for _, obj in ipairs(guiParent:GetChildren()) do
     if obj.Name == "UniversalESP" then obj:Destroy() end
 end
@@ -61,7 +60,7 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 8)
 corner.Parent = toggleBtn
 
--- ---------- Логика перетаскивания кнопки ----------
+-- ---------- Перетаскивание кнопки ----------
 local dragging, dragStart, startPos = false, nil, nil
 toggleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -174,17 +173,16 @@ RunService.RenderStepped:Connect(function()
             continue
         end
 
-        -- Ищем Humanoid (может называться просто Humanoid или быть кастомным)
         local hum = char:FindFirstChildOfClass("Humanoid") or char:FindFirstChild("Humanoid")
         
-        -- Ищем деталь для центра ESP (HRP, Part_HRP, Torso и т.д.)
+        -- УМНЫЙ ПОИСК: перебираем ВСЕ дочерние элементы (GetDescendants)
+        -- Ищем строго "HumanoidRootPart", чтобы не зацепить "Part_HumanoidRootPart"
         local targetPart = nil
-        for _, part in ipairs(char:GetChildren()) do
+        for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
-                local n = part.Name
-                if n == "HumanoidRootPart" or n == "Part_HumanoidRootPart" or n == "Torso" or n == "Part_Torso" or n == "UpperTorso" then
+                if part.Name == "HumanoidRootPart" or part.Name == "Torso" or part.Name == "UpperTorso" then
                     targetPart = part
-                    break
+                    break -- Нашли нужную деталь, останавливаем поиск
                 end
             end
         end
@@ -194,33 +192,28 @@ RunService.RenderStepped:Connect(function()
             continue
         end
 
-        -- Проверка на союзников
         if TEAM_CHECK and lp.Team and plr.Team and lp.Team == plr.Team then
             removeESP(plr)
             continue
         end
 
-        -- Проверка дистанции
         local distance = (Camera.CFrame.Position - targetPart.Position).Magnitude
         if distance > MAX_DISTANCE then
             removeESP(plr)
             continue
         end
 
-        -- Конвертация 3D координат в 2D на экране
         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
         if not onScreen then
             removeESP(plr)
             continue
         end
 
-        -- Создаем или берем существующий ESP
         local esp = plr:FindFirstChild("UniversalESP")
         if not esp then
             esp = createESP(plr)
         end
 
-        -- Размер бокса (чем дальше, тем меньше)
         local height = math.clamp(1200 / distance, 30, 200)
         local width = height * 0.55
 
@@ -261,5 +254,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Очистка, если игрок выходит с сервера
 Players.PlayerRemoving:Connect(removeESP)
